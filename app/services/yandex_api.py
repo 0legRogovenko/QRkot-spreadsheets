@@ -19,6 +19,14 @@ HOURS_MINUTES_TEMPLATE = '{hours} ч. {minutes} мин.'
 HEADER_BG_COLOR = '#D7E4BC'
 FIRST_DATA_ROW = 2
 NAME_COLUMN, DURATION_COLUMN, DESCRIPTION_COLUMN = 0, 1, 2
+MAX_TABLE_ROWS = 1048576
+MAX_TABLE_COLUMNS = 16384
+SERVICE_ROWS = 3  # заголовок отчёта, шапка таблицы и итоговая строка
+TABLE_SIZE_ERROR = (
+    'Отчёт не помещается в таблицу: '
+    'требуется строк — {rows} (лимит {max_rows}), '
+    'колонок — {columns} (лимит {max_columns}).'
+)
 
 
 def format_time_delta(delta: timedelta) -> str:
@@ -36,8 +44,21 @@ async def create_simple_report(
 ) -> str:
     """Создать Excel-отчёт, загрузить на Яндекс Диск и опубликовать.
 
+    Проекты сортируются по скорости сбора средств.
     Возвращает публичную ссылку на файл отчёта.
     """
+    rows_required = len(projects) + SERVICE_ROWS
+    if rows_required > MAX_TABLE_ROWS or len(COLUMNS) > MAX_TABLE_COLUMNS:
+        raise ValueError(TABLE_SIZE_ERROR.format(
+            rows=rows_required,
+            max_rows=MAX_TABLE_ROWS,
+            columns=len(COLUMNS),
+            max_columns=MAX_TABLE_COLUMNS,
+        ))
+    projects = sorted(
+        projects,
+        key=lambda project: project.close_date - project.create_date,
+    )
     report_date = datetime.now().strftime(settings.report_format)
     upload_url, disk_path = await client.create_excel_file(
         FILENAME_TEMPLATE.format(date=report_date)
